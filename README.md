@@ -82,6 +82,8 @@ user_prompt: |
 - **Cron Scheduling** — APScheduler-based daemon mode with any cron expression
 - **Rich CLI** — Beautiful terminal output with Rich panels and tables
 - **Cost Tracking** — Per-run cost recording with JSONL history
+- **Daemon Mode** — Background cron scheduling with `flux start -d`
+- **Tested** — 57 tests covering config, safety, scanner, runner, CLI, resilience
 
 ## Architecture
 

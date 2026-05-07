@@ -219,7 +219,7 @@ flux cost <name>             # 비용 요약
 | **W3** | Next.js 웹 UI + FastAPI + 인증 | 웹에서 에이전트 생성/배포/모니터링 |
 | **W4** | 독푸딩 + OSS 공개 + HN 런칭 | GitHub public, Show HN 포스트, 첫 외부 유저 |
 
-**현재: Week 1 완료 (Day 5) — `flux start`로 뉴스 요약 봇 실행 성공 ✓**
+**현재: Week 1 완료 — 10단계 검증 시나리오 전체 통과, 57개 테스트 올그린 ✓**
 
 ---
 
@@ -243,10 +243,15 @@ flux cost <name>             # 비용 요약
 - 모델 ID 최신화, content 직렬화 수정
 - GitHub 첫 커밋
 
-### Day 6-7: (남은 작업)
-- pytest 테스트 작성
-- `flux start -d` 데몬 모드 실행 테스트
-- 10단계 검증 시나리오 완료
+### Day 6: 테스트 작성 ✅
+- pytest 57개 테스트 작성 (6개 파일)
+- test_config (10), test_shield (12), test_scanner (8), test_runner (10), test_cli (8), test_resilience (9)
+- BudgetTracker 날짜 초기화 버그 발견 및 수정
+
+### Day 7: 데몬 모드 검증 + 10단계 시나리오 완료 ✅
+- `flux start -d --now` 데몬 모드 실행 성공
+- 10단계 검증 시나리오 전체 통과 (init → validate → start → cost → daemon → list → logs → cost → stop)
+- scheduler.py 로깅 포맷 버그 수정
 
 ### 의존성
 

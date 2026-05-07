@@ -53,7 +53,7 @@ class AgentScheduler:
                 logger.error("Agent run completed with error: %s", result.error)
             else:
                 logger.info(
-                    "Agent run completed: tokens=%d/%d, cost=$%.4f, duration=%.1fs",
+                    "Agent run completed: tokens=%s/%s, cost=$%s, duration=%ss",
                     result.input_tokens, result.output_tokens,
                     result.cost_usd, result.duration_seconds,
                 )

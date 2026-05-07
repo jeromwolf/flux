@@ -152,6 +152,14 @@ class BudgetTracker:
     daily_reset_date: str = ""
     monthly_reset_month: str = ""
 
+    def __post_init__(self):
+        from datetime import datetime
+        now = datetime.now()
+        if not self.daily_reset_date:
+            self.daily_reset_date = now.strftime("%Y-%m-%d")
+        if not self.monthly_reset_month:
+            self.monthly_reset_month = now.strftime("%Y-%m")
+
     def check_budget(self, estimated_cost: float = 0.0) -> tuple[bool, str]:
         """Check if spending is within budget. Returns (allowed, reason)."""
         from datetime import datetime
