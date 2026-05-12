@@ -218,3 +218,103 @@ def test_safety_shield_record_success():
     # Circuit breaker reset to closed
     assert shield.circuit_breaker.state == "closed"
     assert shield.circuit_breaker.failure_count == 0
+
+
+# ---------------------------------------------------------------------------
+# W2: Disk persistence
+# ---------------------------------------------------------------------------
+
+def test_budget_tracker_from_disk_missing_file(tmp_path):
+    """from_disk returns a fresh tracker (with the given limits) when the file is absent."""
+    path = str(tmp_path / "no-such-state.json")
+    tracker = BudgetTracker.from_disk(path, per_run=0.1, daily=2.0, monthly=15.0)
+    assert tracker.daily_cost == 0.0
+    assert tracker.monthly_cost == 0.0
+    assert tracker.per_run_limit == 0.1
+    assert tracker.daily_limit == 2.0
+    assert tracker.monthly_limit == 15.0
+
+
+def test_budget_tracker_save_and_reload(tmp_path):
+    """save_to_disk -> from_disk round-trips daily and monthly cost."""
+    path = str(tmp_path / "state.json")
+    a = BudgetTracker(per_run_limit=0.5, daily_limit=2.0, monthly_limit=20.0)
+    a.record_cost(0.25)
+    a.record_cost(0.10)
+    a.save_to_disk(path)
+
+    b = BudgetTracker.from_disk(path, per_run=0.5, daily=2.0, monthly=20.0)
+    assert pytest.approx(b.daily_cost) == 0.35
+    assert pytest.approx(b.monthly_cost) == 0.35
+    # per-run is volatile - not persisted
+    assert b.current_run_cost == 0.0
+    # reset markers persisted
+    assert b.daily_reset_date == a.daily_reset_date
+    assert b.monthly_reset_month == a.monthly_reset_month
+
+
+def test_safety_shield_auto_persists(tmp_path):
+    """SafetyShield.record_success writes state to disk when state_path is set."""
+    state_path = str(tmp_path / "budget.json")
+    shield = SafetyShield(
+        per_run=1.0, daily=10.0, monthly=100.0,
+        state_path=state_path,
+    )
+    shield.start_run()
+    shield.record_success(0.07)
+
+    # A second shield loaded from the same path picks up the accumulated daily.
+    fresh = SafetyShield(
+        per_run=1.0, daily=10.0, monthly=100.0,
+        state_path=state_path,
+    )
+    assert pytest.approx(fresh.budget.daily_cost) == 0.07
+
+
+# ---------------------------------------------------------------------------
+# W2: Emergency stop (halt switch)
+# ---------------------------------------------------------------------------
+
+def test_safety_shield_halt_blocks_pre_check(tmp_path):
+    """When the halt file is present, pre_check fails fast."""
+    halt = tmp_path / "emergency_stop"
+    halt.write_text("halted by test")
+
+    shield = SafetyShield(
+        per_run=10.0, daily=10.0, monthly=100.0,
+        halt_path=str(halt),
+    )
+    shield.start_run()
+    ok, reason = shield.pre_check(estimated_cost=0.0001)
+    assert ok is False
+    assert "Emergency stop" in reason
+
+    # Removing the halt file restores normal flow.
+    halt.unlink()
+    ok, reason = shield.pre_check(estimated_cost=0.0001)
+    assert ok is True
+
+
+# ---------------------------------------------------------------------------
+# W2: Soft threshold warnings (80% / 95%)
+# ---------------------------------------------------------------------------
+
+def test_safety_shield_warning_80_percent():
+    """get_warnings returns a warning once daily usage crosses 80%."""
+    shield = SafetyShield(per_run=10.0, daily=1.0, monthly=100.0)
+    shield.start_run()
+    # 80% of daily
+    shield.budget.record_cost(0.85)
+
+    warnings = shield.get_warnings()
+    assert any("Daily budget" in w for w in warnings)
+
+
+def test_safety_shield_warning_95_percent_monthly():
+    """get_warnings flags monthly usage when it crosses 95%."""
+    shield = SafetyShield(per_run=10.0, daily=10.0, monthly=10.0)
+    shield.start_run()
+    shield.budget.record_cost(9.6)
+
+    warnings = shield.get_warnings()
+    assert any("Monthly budget" in w and "9" in w for w in warnings)

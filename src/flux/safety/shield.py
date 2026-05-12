@@ -1,19 +1,22 @@
 """Flux Safety Shield - Budget tracking, circuit breaker, and cost calculation.
 
 Combines cost calculation (from model pricing data) with runtime safety:
-- BudgetTracker: per-run, daily, and monthly spending limits
+- BudgetTracker: per-run, daily, and monthly spending limits (disk-persisted)
 - CircuitBreaker: trips on repeated LLM call failures
 - SafetyShield: unified pre-check before every LLM call
 
 Usage:
     from flux.safety.shield import SafetyShield, calculate_cost
 
-    shield = SafetyShield(per_run=0.10, daily=1.00, monthly=10.00)
+    shield = SafetyShield(
+        per_run=0.10, daily=1.00, monthly=10.00,
+        state_path="~/.flux/agents/foo/budget_state.json",
+        halt_path="~/.flux/agents/foo/emergency_stop",
+    )
     shield.start_run()
 
     ok, reason = shield.pre_check(estimated_cost=0.003)
     if ok:
-        # make LLM call
         result = calculate_cost("claude-sonnet-4-20250514", 1000, 500)
         shield.record_success(result.total_cost_usd)
     else:
@@ -22,6 +25,8 @@ Usage:
 
 from __future__ import annotations
 
+import json
+import os
 import time
 from dataclasses import dataclass
 from typing import Optional
@@ -197,6 +202,77 @@ class BudgetTracker:
         """Reset per-run counter (called at start of each agent run)."""
         self.current_run_cost = 0.0
 
+    # ------------------------------------------------------------------
+    # Persistence (W2): survive daemon restarts
+    # ------------------------------------------------------------------
+
+    def to_state(self) -> dict:
+        """Serialize cumulative counters (per-run is volatile, not saved)."""
+        return {
+            "daily_cost": self.daily_cost,
+            "daily_reset_date": self.daily_reset_date,
+            "monthly_cost": self.monthly_cost,
+            "monthly_reset_month": self.monthly_reset_month,
+        }
+
+    def save_to_disk(self, path: str) -> None:
+        """Atomically write state to JSON file (tmp -> rename)."""
+        try:
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+        except OSError:
+            pass
+        tmp = path + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(self.to_state(), f, indent=2)
+            os.replace(tmp, path)
+        except OSError as e:
+            logger.warning("Failed to save budget state to %s: %s", path, e)
+
+    @classmethod
+    def from_disk(
+        cls,
+        path: str,
+        *,
+        per_run: float = 0.10,
+        daily: float = 1.00,
+        monthly: float = 10.00,
+    ) -> "BudgetTracker":
+        """Build tracker from disk state, or fresh tracker if missing/corrupt."""
+        tracker = cls(per_run_limit=per_run, daily_limit=daily, monthly_limit=monthly)
+        if not os.path.exists(path):
+            return tracker
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            tracker.daily_cost = float(state.get("daily_cost", 0.0))
+            tracker.daily_reset_date = str(state.get("daily_reset_date") or tracker.daily_reset_date)
+            tracker.monthly_cost = float(state.get("monthly_cost", 0.0))
+            tracker.monthly_reset_month = str(state.get("monthly_reset_month") or tracker.monthly_reset_month)
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            logger.warning("Corrupt budget state at %s, starting fresh: %s", path, e)
+        return tracker
+
+    # ------------------------------------------------------------------
+    # Threshold warnings (W2): emit at 80% and 95%
+    # ------------------------------------------------------------------
+
+    def get_warnings(self) -> list[str]:
+        """Return list of human-readable warnings for soft thresholds."""
+        warnings = []
+        for level, label, used, limit in (
+            ("daily", "Daily", self.daily_cost, self.daily_limit),
+            ("monthly", "Monthly", self.monthly_cost, self.monthly_limit),
+        ):
+            if limit <= 0:
+                continue
+            ratio = used / limit
+            if ratio >= 0.95:
+                warnings.append(f"{label} budget at {ratio*100:.0f}% (${used:.4f} / ${limit:.2f})")
+            elif ratio >= 0.80:
+                warnings.append(f"{label} budget at {ratio*100:.0f}% (${used:.4f} / ${limit:.2f})")
+        return warnings
+
 
 # ============================================================
 # Circuit Breaker
@@ -246,18 +322,53 @@ class CircuitBreaker:
 # ============================================================
 
 class SafetyShield:
-    """Combined safety layer: budget tracking + circuit breaker."""
+    """Combined safety layer: budget tracking + circuit breaker.
 
-    def __init__(self, per_run: float = 0.10, daily: float = 1.00, monthly: float = 10.00):
-        self.budget = BudgetTracker(
-            per_run_limit=per_run,
-            daily_limit=daily,
-            monthly_limit=monthly,
-        )
+    Optionally persists budget state to disk and honors an emergency-stop
+    file that hard-blocks every pre_check until removed.
+    """
+
+    def __init__(
+        self,
+        per_run: float = 0.10,
+        daily: float = 1.00,
+        monthly: float = 10.00,
+        *,
+        state_path: Optional[str] = None,
+        halt_path: Optional[str] = None,
+    ):
+        self.state_path = state_path
+        self.halt_path = halt_path
+
+        if state_path:
+            self.budget = BudgetTracker.from_disk(
+                state_path, per_run=per_run, daily=daily, monthly=monthly,
+            )
+        else:
+            self.budget = BudgetTracker(
+                per_run_limit=per_run,
+                daily_limit=daily,
+                monthly_limit=monthly,
+            )
         self.circuit_breaker = CircuitBreaker()
 
+    # ------------------------------------------------------------------
+    # Halt / Resume (Hard kill switch)
+    # ------------------------------------------------------------------
+
+    def is_halted(self) -> bool:
+        """True if an emergency_stop file is present."""
+        return bool(self.halt_path) and os.path.exists(self.halt_path)
+
+    # ------------------------------------------------------------------
+    # Pre-check
+    # ------------------------------------------------------------------
+
     def pre_check(self, estimated_cost: float = 0.0) -> tuple[bool, str]:
-        """Check both budget and circuit breaker before an LLM call."""
+        """Check halt switch, circuit breaker, then budget."""
+        if self.is_halted():
+            return False, "Emergency stop active (halt file present)"
+
         cb_ok, cb_reason = self.circuit_breaker.can_proceed()
         if not cb_ok:
             return False, cb_reason
@@ -269,9 +380,10 @@ class SafetyShield:
         return True, "OK"
 
     def record_success(self, cost: float):
-        """Record successful LLM call with cost."""
+        """Record successful LLM call with cost; auto-persists if state_path set."""
         self.budget.record_cost(cost)
         self.circuit_breaker.record_success()
+        self._persist_state()
 
     def record_failure(self):
         """Record failed LLM call."""
@@ -281,9 +393,14 @@ class SafetyShield:
         """Reset per-run budget at start of agent run."""
         self.budget.reset_run()
 
+    def get_warnings(self) -> list[str]:
+        """Soft-threshold warnings (80%, 95%) for daily/monthly budget."""
+        return self.budget.get_warnings()
+
     def get_status(self) -> dict:
         """Get current safety status."""
         return {
+            "halted": self.is_halted(),
             "budget": {
                 "current_run": f"${self.budget.current_run_cost:.4f} / ${self.budget.per_run_limit:.2f}",
                 "daily": f"${self.budget.daily_cost:.4f} / ${self.budget.daily_limit:.2f}",
@@ -292,5 +409,14 @@ class SafetyShield:
             "circuit_breaker": {
                 "state": self.circuit_breaker.state,
                 "failures": self.circuit_breaker.failure_count,
-            }
+            },
+            "warnings": self.get_warnings(),
         }
+
+    # ------------------------------------------------------------------
+    # Internal
+    # ------------------------------------------------------------------
+
+    def _persist_state(self) -> None:
+        if self.state_path:
+            self.budget.save_to_disk(self.state_path)

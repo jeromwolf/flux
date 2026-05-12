@@ -331,5 +331,163 @@ def cost(name: str):
     console.print(table)
 
 
+@cli.command()
+@click.argument("name")
+def halt(name: str):
+    """Halt an agent immediately (emergency stop)."""
+    data_dir = os.path.join(os.path.expanduser("~"), ".flux", "agents", name)
+    if not os.path.exists(data_dir):
+        console.print(f"[bold red]Unknown agent: {name}[/]")
+        raise SystemExit(1)
+    halt_file = os.path.join(data_dir, "emergency_stop")
+    with open(halt_file, "w", encoding="utf-8") as f:
+        from datetime import datetime as _dt
+        f.write(_dt.now().isoformat())
+    console.print(f"[bold red]Halted:[/] {name}")
+    console.print("[dim]Next pre_check will block until 'flux resume'.[/]")
+
+
+@cli.command()
+@click.argument("name")
+def resume(name: str):
+    """Resume a halted agent (clears emergency stop)."""
+    halt_file = os.path.join(
+        os.path.expanduser("~"), ".flux", "agents", name, "emergency_stop"
+    )
+    if not os.path.exists(halt_file):
+        console.print(f"[dim]Agent '{name}' is not halted[/]")
+        return
+    os.remove(halt_file)
+    console.print(f"[bold green]Resumed:[/] {name}")
+
+
+@cli.command()
+@click.argument("file", type=click.Path(exists=True))
+@click.option("-d", "--daemon", is_flag=True, help="Run watchdog as background daemon")
+@click.option("--interval", default=60, type=int, help="Health check interval in seconds")
+def watch(file: str, daemon: bool, interval: int):
+    """Watch an agent daemon and auto-restart on failure."""
+    import subprocess
+    from flux.runner import AgentRunner
+    from flux.watchdog import AgentWatchdog
+    from flux.logging import setup_logging
+
+    try:
+        runner = AgentRunner(file)
+    except Exception as e:
+        console.print(f"[bold red]Error loading config:[/] {e}")
+        raise SystemExit(1)
+
+    existing = AgentWatchdog.watchdog_pid_for(runner.name)
+    if existing:
+        console.print(f"[bold yellow]Watchdog for '{runner.name}' already running (PID {existing})[/]")
+        raise SystemExit(1)
+
+    if daemon:
+        # Spawn detached subprocess running this same command without -d
+        cmd = [sys.executable, "-m", "flux.cli", "watch", file, "--interval", str(interval)]
+        proc = subprocess.Popen(
+            cmd,
+            start_new_session=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+        )
+        import time as _t
+        _t.sleep(1)
+        console.print(f"[bold green]Watchdog started:[/] {runner.name} (PID {proc.pid})")
+        console.print(f"  Check interval: {interval}s")
+        console.print(f"  Events: {runner.events_file}")
+        return
+
+    # Foreground mode
+    watchdog_log = os.path.join(runner.data_dir, "watchdog.log")
+    setup_logging(level="INFO", log_format="text", log_file=watchdog_log)
+
+    console.print(f"[bold green]Watching:[/] {runner.name}")
+    console.print(f"  Check interval: {interval}s")
+    console.print(f"  Events: {runner.events_file}")
+    console.print("[dim]Press Ctrl+C to stop[/]")
+
+    wd = AgentWatchdog(runner, check_interval=interval)
+    try:
+        wd.watch_forever()
+    except KeyboardInterrupt:
+        console.print("\n[bold yellow]Watchdog stopped.[/]")
+
+
+@cli.command()
+@click.argument("name")
+def unwatch(name: str):
+    """Stop the watchdog for an agent."""
+    import signal as sig
+    from flux.watchdog import AgentWatchdog
+
+    pid = AgentWatchdog.watchdog_pid_for(name)
+    if pid is None:
+        console.print(f"[bold red]No watchdog running for '{name}'[/]")
+        raise SystemExit(1)
+
+    try:
+        os.kill(pid, sig.SIGTERM)
+        console.print(f"[bold green]Watchdog stopped:[/] {name} (PID {pid})")
+    except ProcessLookupError:
+        console.print(f"[bold yellow]Watchdog for '{name}' was not running[/]")
+
+
+@cli.command()
+@click.argument("name")
+def status(name: str):
+    """Show agent + watchdog health status."""
+    import json
+    from flux.watchdog import AgentWatchdog
+
+    data_dir = os.path.join(os.path.expanduser("~"), ".flux", "agents", name)
+    pid_file = os.path.join(data_dir, "agent.pid")
+    heartbeat_file = os.path.join(data_dir, "heartbeat.json")
+
+    if not os.path.exists(data_dir):
+        console.print(f"[dim]Unknown agent: {name}[/]")
+        raise SystemExit(1)
+
+    # Agent process status
+    agent_pid = None
+    if os.path.exists(pid_file):
+        try:
+            with open(pid_file, "r") as f:
+                agent_pid = int(f.read().strip())
+            os.kill(agent_pid, 0)
+        except (ValueError, OSError):
+            agent_pid = None
+
+    # Watchdog status
+    watchdog_pid = AgentWatchdog.watchdog_pid_for(name)
+
+    # Heartbeat
+    hb = {}
+    if os.path.exists(heartbeat_file):
+        try:
+            with open(heartbeat_file, "r", encoding="utf-8") as f:
+                hb = json.load(f)
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    table = Table(title=f"Status: {name}", show_header=False, box=None, padding=(0, 2))
+    table.add_column(style="dim")
+    table.add_column(style="bold")
+    table.add_row("Agent process", f"[green]running (PID {agent_pid})[/]" if agent_pid else "[red]stopped[/]")
+    table.add_row("Watchdog", f"[green]running (PID {watchdog_pid})[/]" if watchdog_pid else "[dim]none[/]")
+    table.add_row("Last run", str(hb.get("last_run_at") or "-"))
+    table.add_row("Last status", str(hb.get("last_run_status") or "-"))
+    table.add_row("Next run", str(hb.get("next_run_at") or "-"))
+    table.add_row("Consecutive failures", str(hb.get("consecutive_failures", 0)))
+    table.add_row("Total runs", str(hb.get("total_runs", 0)))
+    last_error = hb.get("last_error")
+    if last_error:
+        table.add_row("Last error", f"[red]{last_error}[/]")
+
+    console.print(table)
+
+
 if __name__ == "__main__":
     cli()

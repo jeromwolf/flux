@@ -167,6 +167,22 @@ class AgentRunner:
     def log_file(self) -> str:
         return os.path.join(self.data_dir, "agent.log")
 
+    @property
+    def heartbeat_file(self) -> str:
+        return os.path.join(self.data_dir, "heartbeat.json")
+
+    @property
+    def events_file(self) -> str:
+        return os.path.join(self.data_dir, "events.jsonl")
+
+    @property
+    def emergency_stop_file(self) -> str:
+        return os.path.join(self.data_dir, "emergency_stop")
+
+    @property
+    def budget_state_file(self) -> str:
+        return os.path.join(self.data_dir, "budget_state.json")
+
     # ------------------------------------------------------------------
     # Component factories
     # ------------------------------------------------------------------
@@ -193,12 +209,19 @@ class AgentRunner:
         return tool_mgr
 
     def _create_safety_shield(self) -> SafetyShield:
-        """Create SafetyShield from the agent's budget config."""
+        """Create SafetyShield from the agent's budget config.
+
+        State is loaded from / persisted to ``budget_state_file`` so that
+        daily/monthly counters survive daemon restarts. The ``emergency_stop``
+        file acts as a hard kill switch (``flux halt`` / ``flux resume``).
+        """
         budget = self.agent_config.budget
         return SafetyShield(
             per_run=budget.per_run,
             daily=budget.daily,
             monthly=budget.monthly,
+            state_path=self.budget_state_file,
+            halt_path=self.emergency_stop_file,
         )
 
     # ------------------------------------------------------------------
@@ -218,6 +241,81 @@ class AgentRunner:
         }
         with open(self.cost_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(record) + "\n")
+
+    # ------------------------------------------------------------------
+    # Heartbeat (used by Watchdog)
+    # ------------------------------------------------------------------
+
+    def _empty_heartbeat(self) -> dict:
+        return {
+            "agent_name": self.name,
+            "pid": None,
+            "started_at": None,
+            "last_run_at": None,
+            "last_run_status": None,
+            "last_error": None,
+            "next_run_at": None,
+            "consecutive_failures": 0,
+            "total_runs": 0,
+            "total_failures": 0,
+        }
+
+    def _load_heartbeat(self) -> dict:
+        """Read heartbeat.json or return empty default."""
+        if not os.path.exists(self.heartbeat_file):
+            return self._empty_heartbeat()
+        try:
+            with open(self.heartbeat_file, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (OSError, json.JSONDecodeError):
+            logger.warning("Corrupt heartbeat file for %s, resetting", self.name)
+            return self._empty_heartbeat()
+
+    def _save_heartbeat(self, hb: dict) -> None:
+        """Atomically write heartbeat.json (tmp -> rename)."""
+        tmp = self.heartbeat_file + ".tmp"
+        try:
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(hb, f, indent=2)
+            os.replace(tmp, self.heartbeat_file)
+        except OSError as e:
+            logger.warning("Failed to save heartbeat for %s: %s", self.name, e)
+
+    def mark_started(self) -> None:
+        """Record daemon start in heartbeat."""
+        hb = self._load_heartbeat()
+        hb["pid"] = os.getpid()
+        hb["started_at"] = datetime.now().isoformat()
+        self._save_heartbeat(hb)
+
+    def update_heartbeat(
+        self,
+        *,
+        status: str,
+        error: Optional[str] = None,
+        next_run_at: Optional[str] = None,
+    ) -> None:
+        """Update heartbeat after a run.
+
+        Args:
+            status: "success", "error", or "budget_exceeded"
+            error: Error message if status != success
+            next_run_at: ISO timestamp of next scheduled run (from scheduler)
+        """
+        hb = self._load_heartbeat()
+        hb["agent_name"] = self.name
+        hb["last_run_at"] = datetime.now().isoformat()
+        hb["last_run_status"] = status
+        hb["last_error"] = error
+        hb["total_runs"] = int(hb.get("total_runs", 0)) + 1
+        if status == "success":
+            hb["consecutive_failures"] = 0
+        else:
+            hb["consecutive_failures"] = int(hb.get("consecutive_failures", 0)) + 1
+            hb["total_failures"] = int(hb.get("total_failures", 0)) + 1
+        if next_run_at is not None:
+            hb["next_run_at"] = next_run_at
+        self._save_heartbeat(hb)
 
     def get_cost_summary(self) -> dict:
         """Read cost history and return aggregated summary.
@@ -334,6 +432,14 @@ class AgentRunner:
             self._save_cost_record(run_result)
         except OSError:
             logger.warning("Failed to save cost record")
+
+        # Update heartbeat for Watchdog
+        if run_result.error is None:
+            self.update_heartbeat(status="success")
+        elif "Budget exceeded" in (run_result.error or ""):
+            self.update_heartbeat(status="budget_exceeded", error=run_result.error)
+        else:
+            self.update_heartbeat(status="error", error=run_result.error)
 
         return run_result
 

@@ -138,3 +138,49 @@ def test_model_aliases_completeness():
             f"resolve_model({alias!r}) returned model_id={model_id!r}, "
             f"expected {full_id!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# W2: Heartbeat lifecycle (no LLM call needed)
+# ---------------------------------------------------------------------------
+
+def test_runner_heartbeat_lifecycle(runner):
+    """mark_started -> update_heartbeat tracks runs and failure streak."""
+    runner.mark_started()
+    hb = runner._load_heartbeat()
+    assert hb["agent_name"] == runner.name
+    assert hb["pid"] == os.getpid()
+    assert hb["total_runs"] == 0
+    assert hb["consecutive_failures"] == 0
+
+    # One success
+    runner.update_heartbeat(status="success")
+    hb = runner._load_heartbeat()
+    assert hb["total_runs"] == 1
+    assert hb["last_run_status"] == "success"
+    assert hb["consecutive_failures"] == 0
+
+    # Two failures - streak grows
+    runner.update_heartbeat(status="error", error="oops 1")
+    runner.update_heartbeat(status="error", error="oops 2")
+    hb = runner._load_heartbeat()
+    assert hb["total_runs"] == 3
+    assert hb["consecutive_failures"] == 2
+    assert hb["last_error"] == "oops 2"
+    assert hb["total_failures"] == 2
+
+    # Success resets streak but not totals
+    runner.update_heartbeat(status="success", next_run_at="2026-05-13T08:00:00")
+    hb = runner._load_heartbeat()
+    assert hb["consecutive_failures"] == 0
+    assert hb["next_run_at"] == "2026-05-13T08:00:00"
+    assert hb["total_runs"] == 4
+
+
+def test_runner_heartbeat_corrupt_file_resets_safely(runner):
+    """Corrupt heartbeat.json doesn't crash subsequent reads."""
+    with open(runner.heartbeat_file, "w") as f:
+        f.write("{not valid json")
+    hb = runner._load_heartbeat()
+    assert hb["agent_name"] == runner.name
+    assert hb["consecutive_failures"] == 0

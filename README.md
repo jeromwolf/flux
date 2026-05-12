@@ -72,18 +72,47 @@ user_prompt: |
 | `flux list` | List running agents |
 | `flux logs <name>` | View agent logs |
 | `flux cost <name>` | View cost summary |
+| `flux watch <file>` | Watchdog: auto-restart on failure |
+| `flux watch <file> -d` | Watchdog (background daemon) |
+| `flux unwatch <name>` | Stop watchdog |
+| `flux status <name>` | Agent + watchdog health summary |
+| `flux halt <name>` | Emergency stop (blocks next pre-check) |
+| `flux resume <name>` | Resume a halted agent |
 
 ## Features
 
-- **Safety Shield** — Per-run, daily, monthly budget limits with automatic circuit breaker
+- **Safety Shield** — Per-run, daily, monthly budget limits with automatic circuit breaker.
+  Budget state is **disk-persisted** so daily/monthly counters survive daemon restarts.
+- **Soft Threshold Warnings** — Surfaces at 80% and 95% of daily/monthly budget before hard cutoff
+- **Emergency Stop** — `flux halt <name>` immediately blocks every pre-check; `flux resume` clears it
+- **Watchdog Runtime** — Independent supervisor monitors PID + heartbeat freshness + consecutive
+  failures; auto-restarts the agent with exponential backoff (30s → 60s → 5m → 15m → 30m).
+  Recovery is logged to `~/.flux/agents/<name>/events.jsonl`.
 - **Multi-LLM** — Anthropic, OpenAI, Google, Ollama (BYOK: bring your own key)
 - **Built-in Tools** — Web search, web fetch, file I/O, memory, scheduling
 - **Security** — AST-based tool scanning, SSRF protection, path traversal prevention, secret masking
-- **Cron Scheduling** — APScheduler-based daemon mode with any cron expression
+- **Hardened Scheduler** — `misfire_grace_time=300s`, `max_instances=1`, `coalesce=True`
+  so missed runs catch up safely without overlap
 - **Rich CLI** — Beautiful terminal output with Rich panels and tables
-- **Cost Tracking** — Per-run cost recording with JSONL history
-- **Daemon Mode** — Background cron scheduling with `flux start -d`
-- **Tested** — 57 tests covering config, safety, scanner, runner, CLI, resilience
+- **Cost Tracking** — Per-run cost recording with JSONL history + persistent budget state
+- **Tested** — 81 tests covering config, safety + persistence, watchdog, scheduler, runner, CLI, resilience
+
+## 24/7 Operation Recipe
+
+```bash
+# Terminal 1: start the agent as a daemon
+flux start agents/news-bot.yaml -d --now
+
+# Terminal 2: start the watchdog (separate process, survives agent crashes)
+flux watch agents/news-bot.yaml -d
+
+# Any time
+flux status news-bot       # health summary
+flux halt news-bot         # emergency stop
+flux resume news-bot       # back online
+flux unwatch news-bot      # stop the supervisor
+flux stop news-bot         # stop the agent daemon
+```
 
 ## Architecture
 

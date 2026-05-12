@@ -219,11 +219,49 @@ flux cost <name>             # 비용 요약
 | **W3** | Next.js 웹 UI + FastAPI + 인증 | 웹에서 에이전트 생성/배포/모니터링 |
 | **W4** | 독푸딩 + OSS 공개 + HN 런칭 | GitHub public, Show HN 포스트, 첫 외부 유저 |
 
-**현재: Week 1 완료 — 10단계 검증 시나리오 전체 통과, 57개 테스트 올그린 ✓**
+**현재: Week 2 완료 — Watchdog/Shield 영속화/Scheduler 강건화, 81개 테스트 올그린 ✓**
 
 ---
 
-## 8. Week 1 상세 (현재 작업)
+## 8. Week 2 완료 (24/7 안전망)
+
+### Day 8-9: Watchdog 모듈 ✅
+- `src/flux/watchdog.py` 신규 (`AgentWatchdog` 클래스)
+- 헬스체크 3종: 프로세스 생존, 하트비트 신선도, 연속 실패 카운트
+- exponential backoff 재시작 (30s → 60s → 5m → 15m → 30m 천장)
+- `~/.flux/agents/<name>/heartbeat.json` + `events.jsonl` 영속화
+- `flux watch <file>` / `flux unwatch <name>` / `flux status <name>` CLI 추가
+
+### Day 10-11: Safety Shield 강화 ✅
+- `BudgetTracker` 디스크 영속화 (`budget_state.json`, atomic write)
+- 일/월 임계 경고 (80%, 95%) — `SafetyShield.get_warnings()`
+- 비상 차단: `emergency_stop` 파일 + `flux halt` / `flux resume` CLI
+- `record_success()` 호출 시 자동 디스크 저장 → 데몬 재시작해도 누적 유지
+
+### Day 12: Scheduler 견고화 ✅
+- `misfire_grace_time=300`, `max_instances=1`, `coalesce=True` 기본 적용
+- 데몬 시작 시 `mark_started()`로 하트비트 부트스트랩
+- 실행 후 다음 cron `next_run_at` 하트비트 동기화 (Watchdog freshness anchor)
+- 실패 backoff는 Watchdog에 위임 (책임 분리)
+
+### Day 13: 통합 검증 ✅
+- CLI 통합: `halt`/`resume`/`status`/`watch`/`unwatch` 5개 명령 E2E 동작 확인
+- 단위: heartbeat 라이프사이클, corrupt 파일 안전 회복, budget 영속화 round-trip
+
+### Day 14: 문서 + 커밋 ✅
+- README.md: "24/7 Operation Recipe" 섹션 추가, CLI 표/Features 갱신
+- CLAUDE.md: W2 완료 마킹
+
+### W2 테스트 (57 → 81, +24개)
+- `test_watchdog.py` 신규 6개 (헬스체크 4 + backoff 1 + event log 1)
+- `test_shield.py` +6 (영속화 3 + 비상차단 1 + 임계 경고 2)
+- `test_scheduler.py` 신규 5개 (defaults/cron parser/overrides/hardening flags)
+- `test_cli.py` +5 (halt/resume/status/help)
+- `test_runner.py` +2 (heartbeat 라이프사이클, corrupt 회복)
+
+---
+
+## 9. Week 1 상세 (이전 작업)
 
 ### Day 1-2: 프로젝트 구조 + 코어 추출 ✅
 - pyproject.toml 셋업
@@ -268,7 +306,7 @@ pydantic>=2.0          # 설정 검증
 
 ---
 
-## 9. 기술 스택
+## 10. 기술 스택
 
 | 항목 | 선택 | 이유 |
 |------|------|------|
@@ -283,7 +321,7 @@ pydantic>=2.0          # 설정 검증
 
 ---
 
-## 10. 비즈니스 모델
+## 11. 비즈니스 모델
 
 | 플랜 | 가격 | 내용 |
 |------|------|------|
@@ -296,7 +334,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 11. 킬러 피처 (경쟁 차별화)
+## 12. 킬러 피처 (경쟁 차별화)
 
 1. **Safety Shield**: $47K 비용 폭주를 원천 차단하는 하드리밋 + 자동 차단기 (경쟁사 없음)
 2. **Watchdog Runtime**: 에이전트 장애 시 5분 내 자동 복구 (실전 검증됨)
@@ -304,7 +342,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 12. 경쟁사
+## 13. 경쟁사
 
 | 경쟁사 | 약점 | 우리의 우위 |
 |--------|------|-------------|
@@ -319,7 +357,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 13. GTM 전략
+## 14. GTM 전략
 
 1. **Month 1~3**: OSS 코어 공개, GitHub 스타 확보, HN/ProductHunt/GeekNews 런칭
 2. **Month 4~6**: 클라우드 호스팅 베타, 무료→Pro 전환
@@ -335,7 +373,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 14. 참고 문서
+## 15. 참고 문서
 
 | 문서 | 위치 |
 |------|------|
@@ -346,7 +384,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 15. 개발 규칙
+## 16. 개발 규칙
 
 ### DO
 - flux-openclaw 코어 모듈에서 추출 시 원본 구조/패턴 유지
