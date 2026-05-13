@@ -489,5 +489,22 @@ def status(name: str):
     console.print(table)
 
 
+@cli.command()
+@click.option("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
+@click.option("--port", default=8000, type=int, help="Bind port (default 8000)")
+@click.option("--reload", is_flag=True, help="Enable auto-reload (dev only)")
+def serve(host: str, port: int, reload: bool):
+    """Start the Flux web API (FastAPI + SQLAlchemy)."""
+    try:
+        import uvicorn
+    except ImportError:
+        console.print("[bold red]Missing dependency:[/] install with [cyan]pip install 'flux-agent[api]'[/]")
+        raise SystemExit(1)
+
+    console.print(f"[bold green]Starting Flux API:[/] http://{host}:{port}")
+    console.print("[dim]Press Ctrl+C to stop[/]")
+    uvicorn.run("flux.api.app:app", host=host, port=port, reload=reload)
+
+
 if __name__ == "__main__":
     cli()

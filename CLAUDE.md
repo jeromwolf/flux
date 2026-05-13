@@ -219,11 +219,63 @@ flux cost <name>             # 비용 요약
 | **W3** | Next.js 웹 UI + FastAPI + 인증 | 웹에서 에이전트 생성/배포/모니터링 |
 | **W4** | 독푸딩 + OSS 공개 + HN 런칭 | GitHub public, Show HN 포스트, 첫 외부 유저 |
 
-**현재: Week 2 완료 — Watchdog/Shield 영속화/Scheduler 강건화, 81개 테스트 올그린 ✓**
+**현재: Week 3 완료 — Web UI + FastAPI + OAuth + PostgreSQL + WebSocket, 113개 테스트 올그린 ✓**
 
 ---
 
-## 8. Week 2 완료 (24/7 안전망)
+## 8. Week 3 완료 (Web UI + Multi-tenant API)
+
+### Day 15-16: FastAPI + PostgreSQL + Alembic ✅
+- `src/flux/api/` 신규 패키지 (db/models/schemas/repositories/app)
+- SQLAlchemy 2.x async + asyncpg(prod) / aiosqlite(tests)
+- 4 테이블(users/agents/runs) + 멀티테넌트 unique 제약
+- `alembic/versions/0001_initial.py` (PG 네이티브 UUID + SQLite CHAR(36) 듀얼 디스패치)
+- `flux serve --host --port --reload` CLI 추가
+- `docker-compose.yml` (postgres:16-alpine, healthcheck)
+
+### Day 17: GitHub OAuth + JWT + Agent API ✅
+- `auth.py`: HS256 JWT(`python-jose`) + itsdangerous CSRF state 토큰
+- 4 auth 라우트: `/auth/github/{login,callback}` + `/auth/{me,logout}`
+- 8 agent 라우트: `/agents` CRUD + `/agents/{id}/{runs,run,halt,resume,status}`
+- **멀티테넌트 격리**: `Agent.user_id == current_user.id` 필터 강제, cross-tenant 접근 시 404(403 X — 정보 누설 방지)
+- 데이터 디렉토리: `~/.flux/users/<user_id>/agents/<name>/` (W2 watchdog/heartbeat/cost 호환)
+
+### Day 17 후반: Run Trigger ✅
+- `services/runner_proxy.py`: DB의 yaml_source를 디스크에 materialise하고 `AgentRunner`로 실행
+- `POST /agents/{id}/run`: 응답 202 + queued Run 행 즉시 반환, `BackgroundTasks`가 `asyncio.to_thread`로 비동기 실행
+- 결과를 새 session으로 Run 행 업데이트 (success/error/budget_exceeded)
+
+### Day 18-19: Next.js 14 프론트엔드 ✅
+- `web/` 디렉토리 (Next.js 14 App Router + TypeScript + Tailwind 3 + TanStack Query)
+- 5개 화면: 랜딩(`/`), 로그인(`/login`), 대시보드(`/dashboard`), 빌더(`/agents/new`), 상세(`/agents/[id]`)
+- Linear/Vercel 톤 (다크 모드, accent violet)
+- **NextAuth 안 씀**: 백엔드 OAuth + Next.js rewrites로 same-origin 단순화 → 쿠키/CORS 회피
+- `lib/api.ts` 백엔드 클라이언트, `lib/types.ts` 타입 동기화
+
+### Day 20: WebSocket 실시간 스트림 ✅
+- `services/event_bus.py`: in-process 비동기 pub/sub(에이전트별 큐 fan-out)
+- `services/log_tailer.py`: inode + position 추적 (로테이션 안전)
+- `routers/ws.py`: `/ws/agents/{id}` 쿠키 인증 + 멀티테넌트 격리(1008 close)
+- 이벤트: `snapshot`(연결 시) / `log` / `heartbeat` / `run_complete`
+- 프론트 `lib/ws.ts` + 상세 페이지에 Live log 패널 + 연결 상태 dot
+
+### Day 21: 통합 + 문서 + 커밋 ✅
+- `Dockerfile`(API 컨테이너): alembic upgrade + uvicorn
+- `docker-compose.yml`에 `api` 서비스 추가 (`--profile full`로 opt-in)
+- `.env.example` 갱신: DB/JWT/OAuth/cookie 변수
+- README "Web UI Quick Start" + API surface 섹션
+- 단일 W3 커밋
+
+### W3 테스트 (81 → 113, +32개)
+- `test_api_db.py` 신규 9 (모델/repo/멀티테넌트 격리/cascade)
+- `test_api_app.py` 신규 3 (healthz/openapi)
+- `test_api_auth.py` 신규 7 (OAuth state/콜백/me/logout)
+- `test_api_agents.py` 신규 10 (auth gating/CRUD/cross-tenant/halt/run trigger 3가지)
+- `test_api_ws.py` 신규 3 (인증/cross-tenant/snapshot+run_complete fan-out)
+
+---
+
+## 9. Week 2 완료 (24/7 안전망)
 
 ### Day 8-9: Watchdog 모듈 ✅
 - `src/flux/watchdog.py` 신규 (`AgentWatchdog` 클래스)
@@ -261,7 +313,7 @@ flux cost <name>             # 비용 요약
 
 ---
 
-## 9. Week 1 상세 (이전 작업)
+## 10. Week 1 상세 (이전 작업)
 
 ### Day 1-2: 프로젝트 구조 + 코어 추출 ✅
 - pyproject.toml 셋업
@@ -306,7 +358,7 @@ pydantic>=2.0          # 설정 검증
 
 ---
 
-## 10. 기술 스택
+## 11. 기술 스택
 
 | 항목 | 선택 | 이유 |
 |------|------|------|
@@ -321,7 +373,7 @@ pydantic>=2.0          # 설정 검증
 
 ---
 
-## 11. 비즈니스 모델
+## 12. 비즈니스 모델
 
 | 플랜 | 가격 | 내용 |
 |------|------|------|
@@ -334,7 +386,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 12. 킬러 피처 (경쟁 차별화)
+## 13. 킬러 피처 (경쟁 차별화)
 
 1. **Safety Shield**: $47K 비용 폭주를 원천 차단하는 하드리밋 + 자동 차단기 (경쟁사 없음)
 2. **Watchdog Runtime**: 에이전트 장애 시 5분 내 자동 복구 (실전 검증됨)
@@ -342,7 +394,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 13. 경쟁사
+## 14. 경쟁사
 
 | 경쟁사 | 약점 | 우리의 우위 |
 |--------|------|-------------|
@@ -357,7 +409,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 14. GTM 전략
+## 15. GTM 전략
 
 1. **Month 1~3**: OSS 코어 공개, GitHub 스타 확보, HN/ProductHunt/GeekNews 런칭
 2. **Month 4~6**: 클라우드 호스팅 베타, 무료→Pro 전환
@@ -373,7 +425,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 15. 참고 문서
+## 16. 참고 문서
 
 | 문서 | 위치 |
 |------|------|
@@ -384,7 +436,7 @@ BYOK 모델: 유저가 자기 API 키 사용 → LLM 비용 $0, 인프라 월 $1
 
 ---
 
-## 16. 개발 규칙
+## 17. 개발 규칙
 
 ### DO
 - flux-openclaw 코어 모듈에서 추출 시 원본 구조/패턴 유지

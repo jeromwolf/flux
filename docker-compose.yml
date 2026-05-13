@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: flux-postgres
+    environment:
+      POSTGRES_DB: flux
+      POSTGRES_USER: flux
+      POSTGRES_PASSWORD: flux_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flux -d flux"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  api:
+    profiles: ["full"]            # opt-in: `docker compose --profile full up`
+    build: .
+    container_name: flux-api
+    environment:
+      FLUX_DATABASE_URL: postgresql+asyncpg://flux:flux_dev@postgres:5432/flux
+      JWT_SECRET: ${JWT_SECRET:-dev-secret-change-me}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      OAUTH_CALLBACK_URL: ${OAUTH_CALLBACK_URL:-http://localhost:3000/auth/github/callback}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      # Per-user agent data (logs, heartbeat, budget_state) lives under ~/.flux.
+      # Mount the host home so the CLI and the container see the same files.
+      - "${HOME}/.flux:/root/.flux"
+
+volumes:
+  pgdata:

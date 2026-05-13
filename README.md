@@ -95,7 +95,9 @@ user_prompt: |
   so missed runs catch up safely without overlap
 - **Rich CLI** — Beautiful terminal output with Rich panels and tables
 - **Cost Tracking** — Per-run cost recording with JSONL history + persistent budget state
-- **Tested** — 81 tests covering config, safety + persistence, watchdog, scheduler, runner, CLI, resilience
+- **Web UI (Week 3)** — Next.js 14 dashboard with GitHub OAuth, agent builder, live run logs via WebSocket
+- **Multi-tenant API** — FastAPI + PostgreSQL + Alembic; per-user data dirs under `~/.flux/users/<id>/`
+- **Tested** — 113 tests covering config, safety + persistence, watchdog, scheduler, runner, CLI, resilience, DB, OAuth, agents API, WebSocket
 
 ## 24/7 Operation Recipe
 
@@ -113,6 +115,63 @@ flux resume news-bot       # back online
 flux unwatch news-bot      # stop the supervisor
 flux stop news-bot         # stop the agent daemon
 ```
+
+## Web UI Quick Start (Week 3)
+
+The browser dashboard lets you (or other GitHub users) create and operate agents
+without touching the CLI.
+
+```bash
+# 1. Register a GitHub OAuth App
+#    Settings -> Developer settings -> OAuth Apps -> New
+#    Callback URL: http://localhost:3000/auth/github/callback
+# 2. Copy .env.example -> .env and fill in GITHUB_CLIENT_ID/GITHUB_CLIENT_SECRET + JWT_SECRET
+
+# 3. Boot Postgres
+docker compose up -d postgres
+
+# 4. Apply migrations + start the API
+pip install -e '.[api]'
+alembic upgrade head
+flux serve --port 8000     # uvicorn on :8000
+
+# 5. Start the web app (in a second terminal)
+cd web
+pnpm install
+pnpm dev                   # Next.js on :3000
+
+# 6. Open http://localhost:3000 -> "Sign in with GitHub"
+```
+
+All requests from the browser are same-origin (Next.js rewrites
+`/auth/*` and `/api/*` to the API on `:8000`), so cookies stay HttpOnly+SameSite=Lax
+and there's no CORS to configure.
+
+**Full-stack via docker compose** (production-style):
+
+```bash
+docker compose --profile full up        # postgres + api containers
+```
+
+### API surface
+
+```
+/healthz                         GET   meta
+/auth/github/{login,callback}    GET   OAuth flow
+/auth/{me,logout}                GET/POST
+/agents                          GET/POST   list + create
+/agents/{id}                     GET/PUT/DELETE
+/agents/{id}/runs                GET   execution history
+/agents/{id}/run                 POST  trigger now (queued -> background)
+/agents/{id}/{halt,resume,status} POST/POST/GET
+/ws/agents/{id}                  WS    snapshot + log + heartbeat + run_complete
+```
+
+### Multi-tenant isolation
+
+- Every router filters by `Agent.user_id == current_user.id`.
+- Cross-tenant access returns **404 (not 403)** so existence isn't leaked.
+- On-disk data is partitioned: `~/.flux/users/<user_id>/agents/<name>/`.
 
 ## Architecture
 

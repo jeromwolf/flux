@@ -37,7 +37,28 @@ dependencies = [
 [project.optional-dependencies]
 openai = ["openai>=1.60.0"]
 google = ["google-generativeai>=0.5.0"]
-all = ["openai>=1.60.0", "google-generativeai>=0.5.0"]
+api = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",
+    "aiosqlite>=0.20.0",
+    "python-jose[cryptography]>=3.3.0",
+    "itsdangerous>=2.2.0",
+]
+all = [
+    "openai>=1.60.0",
+    "google-generativeai>=0.5.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "sqlalchemy[asyncio]>=2.0.30",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",
+    "aiosqlite>=0.20.0",
+    "python-jose[cryptography]>=3.3.0",
+    "itsdangerous>=2.2.0",
+]
 dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.23.0",
