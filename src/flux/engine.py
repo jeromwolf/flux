@@ -31,11 +31,11 @@ Usage:
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from functools import partial
-from typing import Callable, Optional, Set
+from typing import Callable
 
-from flux.tools.manager import ToolManager, _filter_tool_input, execute_tool
+from flux.tools.manager import ToolManager, _filter_tool_input
 from flux.config import get_config
 from flux.core.resilience import (
     retry_llm_call,
@@ -45,7 +45,7 @@ from flux.core.resilience import (
     _TimeoutError,
 )
 from flux.safety.shield import calculate_cost, SafetyShield
-from flux.llm import StreamEvent, get_provider
+from flux.llm import StreamEvent
 from flux.logging import get_logger
 
 _logger = get_logger("engine")

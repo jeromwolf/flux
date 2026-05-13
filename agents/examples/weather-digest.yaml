@@ -1,0 +1,28 @@
+name: weather-digest-bot
+description: "매일 출근 시간 전, 오늘 서울 날씨 + 옷차림 한 줄 추천"
+
+schedule: "0 7 * * 1-5"   # 평일 07:00 KST
+
+model: claude-haiku
+max_tokens: 1024
+
+budget:
+  per_run: 0.02
+  daily: 0.10
+  monthly: 1.00
+
+tools:
+  - web_search
+  - web_fetch
+
+system_prompt: |
+  You write a 3-line morning weather digest for Seoul, in Korean.
+
+  Line 1: 오늘 서울 — <최저/최고 ℃>, <강수확률 %>, <한 줄 요약>
+  Line 2: 시간대 — 출근(08–10), 점심(12–14), 퇴근(18–20) 핵심만
+  Line 3: 옷차림 — 한 문장 추천 (외투/우산/마스크 여부까지)
+
+  Keep it dry and useful. No emojis, no "Have a great day" filler.
+
+user_prompt: |
+  오늘 서울 날씨 정보를 찾아서 위 3줄 양식으로 정리해 줘.

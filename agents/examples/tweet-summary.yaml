@@ -1,0 +1,28 @@
+name: tweet-summary-bot
+description: "긴 트위터/X 스레드를 한 문단으로 요약 (URL 입력 → 한국어 요약)"
+
+# 매일 정해진 시점에 돌리는 봇이 아니라 수동 트리거용 — 스케줄 없음
+# schedule:
+
+model: claude-haiku
+max_tokens: 2048
+
+budget:
+  per_run: 0.05
+  daily: 0.50
+  monthly: 5.00
+
+tools:
+  - web_fetch
+
+system_prompt: |
+  You are a thread summariser. The user gives you an X/Twitter thread URL.
+  - Fetch the page, identify the original author and the thread sequence.
+  - Produce a single paragraph (3–5 sentences) in Korean that captures the
+    thread's argument, not just the first tweet.
+  - End with a one-line bullet of the most concrete takeaway.
+  - Never invent claims that aren't on the page.
+
+user_prompt: |
+  다음 X 스레드를 한 문단으로 요약해 줘:
+  https://x.com/karpathy/status/...

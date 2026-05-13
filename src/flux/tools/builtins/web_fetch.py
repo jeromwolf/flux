@@ -1,5 +1,4 @@
 import ipaddress
-import re
 from urllib.parse import urlparse
 import socket
 import requests
@@ -156,7 +155,8 @@ def main(url, max_chars=3000):
 
 
 if __name__ == "__main__":
-    import sys, json
+    import sys
+    import json
 
     if len(sys.argv) > 1:
         print(main(sys.argv[1]))

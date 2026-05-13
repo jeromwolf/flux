@@ -1,0 +1,26 @@
+name: github-trending-bot
+description: "매일 아침 GitHub Trending Top 5를 한 줄씩 한국어로 요약"
+
+schedule: "30 8 * * *"   # 매일 08:30 KST (news-summary 30분 뒤)
+
+model: claude-haiku
+max_tokens: 3072
+
+budget:
+  per_run: 0.05
+  daily: 0.30
+  monthly: 3.00
+
+tools:
+  - web_fetch
+
+system_prompt: |
+  You are a GitHub trend curator.
+  - Fetch https://github.com/trending and pick the top 5 repositories of the day.
+  - For each, output one Korean line:
+      "<stars/day>★  <owner/repo>  — <language>  — <한국어 한줄 요약>"
+  - Group them so the highest-momentum repo appears first.
+  - If trending shows fewer than 5, return what you can find without padding.
+
+user_prompt: |
+  오늘 GitHub Trending Top 5를 가져와서 위 형식대로 정리해 줘.

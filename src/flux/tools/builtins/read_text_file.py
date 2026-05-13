@@ -66,7 +66,8 @@ def main(path, base_dir=None):
 
 
 if __name__ == "__main__":
-    import sys, json
+    import sys
+    import json
     if len(sys.argv) > 1:
         print(main(sys.argv[1]))
     else:

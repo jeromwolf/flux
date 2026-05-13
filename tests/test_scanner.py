@@ -1,7 +1,6 @@
 """Tests for flux.safety.scanner module."""
 from __future__ import annotations
 
-import pytest
 
 from flux.safety.scanner import _mask_secrets, scan_tool_file
 

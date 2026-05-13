@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/jeromwolf/flux/discussions
+    about: Use Discussions for usage questions, design proposals, and show-and-tell.
+  - name: Security disclosures
+    url: mailto:kelly@flux.ai.kr
+    about: Please report security issues privately by email.

@@ -6,6 +6,11 @@ Flux is an open-source AI agent runtime that lets you create, deploy, and manage
 
 **AI 에이전트, 만들었으면 돌려야죠. 월 $0.01부터.**
 
+<!-- TODO(launch): replace with real 30-45s demo GIF before v0.1.0 -->
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="Flux — agent dashboard, run-now, and live log via WebSocket" width="820" />
+</p>
+
 ## Quick Start
 
 ```bash
@@ -30,6 +35,17 @@ flux start agents/news-bot.yaml -d
 # Check costs
 flux cost news-bot
 ```
+
+## Example agents
+
+| File | Schedule | Budget (run/day/mo) | Use case |
+|---|---|---|---|
+| [`news-summary.yaml`](agents/examples/news-summary.yaml) | `0 8 * * *` | $0.10 / $1.00 / $10.00 | Top-5 AI news, summarised in Korean |
+| [`github-trending.yaml`](agents/examples/github-trending.yaml) | `30 8 * * *` | $0.05 / $0.30 / $3.00 | GitHub Trending Top-5, one line each |
+| [`weather-digest.yaml`](agents/examples/weather-digest.yaml) | `0 7 * * 1-5` | $0.02 / $0.10 / $1.00 | 3-line Seoul weather + outfit (weekdays) |
+| [`tweet-summary.yaml`](agents/examples/tweet-summary.yaml) | manual | $0.05 / $0.50 / $5.00 | Paste an X thread URL → Korean paragraph |
+
+All four together cost roughly **$1/month** if you run them every day.
 
 ## Agent YAML
 

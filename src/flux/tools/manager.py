@@ -12,7 +12,6 @@ import json
 import ast
 import hashlib
 import types
-import importlib.util
 from pathlib import Path
 
 from flux.safety.scanner import _DANGEROUS_RE

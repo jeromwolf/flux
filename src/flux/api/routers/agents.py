@@ -9,10 +9,9 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Annotated
 
 import yaml
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import ValidationError
 
 from flux.api.deps import CurrentUserDep, SessionDep

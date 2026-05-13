@@ -1,10 +1,8 @@
 """Tests for flux.config module."""
 from __future__ import annotations
 
-import json
 import pytest
 
-import flux.config as config_module
 from flux.config import (
     AgentConfig,
     BudgetConfig,

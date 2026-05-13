@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import signal
 import sys
-import os
 from datetime import datetime
 
 from apscheduler.schedulers.blocking import BlockingScheduler

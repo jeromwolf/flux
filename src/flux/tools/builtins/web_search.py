@@ -37,7 +37,8 @@ def main(query, max_results=5):
 
 
 if __name__ == "__main__":
-    import sys, json
+    import sys
+    import json
 
     if len(sys.argv) > 1:
         print(main(sys.argv[1]))

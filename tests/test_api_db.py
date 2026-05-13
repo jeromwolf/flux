@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
 from flux.api.db import Base
-from flux.api.models import Agent, Run, User
 from flux.api.repositories import AgentRepository, RunRepository, UserRepository
 
 

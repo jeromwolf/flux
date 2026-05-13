@@ -1,0 +1,65 @@
+name: Bug report
+description: Something broke — file a reproducible report.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug. The clearer the
+        reproduction, the faster it gets fixed.
+  - type: input
+    id: version
+    attributes:
+      label: Flux version
+      description: "Output of `flux --version`"
+      placeholder: "0.1.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - CLI (flux start / flux watch / flux halt)
+        - API (FastAPI on :8000)
+        - Web UI (Next.js on :3000)
+        - Other / unclear
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Step-by-step. A `git clone` to broken state is ideal.
+      placeholder: |
+        1. `flux init test-bot`
+        2. `flux start agents/test-bot.yaml`
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened instead
+      description: Paste stack traces / log lines. `~/.flux/agents/<name>/agent.log` often has more context than the terminal.
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS / Python / Node / DB
+      placeholder: |
+        - macOS 14.5
+        - Python 3.12.11
+        - Node 20.19
+        - Postgres 16 (docker)
+    validations:
+      required: true

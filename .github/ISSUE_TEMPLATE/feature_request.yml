@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest an idea or improvement.
+title: "feat: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before opening, please skim the README and existing issues — there's
+        a good chance someone has thought about this.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What's the problem?
+      description: Describe the situation that motivates this. "I wanted X but got Y."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like Flux to do? A small API sketch is great.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope
+      options:
+        - label: I'd be willing to send a PR for this.
+        - label: This should live outside Flux core (in a plugin or separate package).

@@ -24,7 +24,7 @@ import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
 
 from flux.api.auth import decode_access_token
-from flux.api.db import get_session, get_sessionmaker
+from flux.api.db import get_sessionmaker
 from flux.api.deps import get_config
 from flux.api.repositories import AgentRepository, UserRepository
 from flux.api.services.event_bus import EventBus
