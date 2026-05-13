@@ -43,7 +43,7 @@ api = [
     "sqlalchemy[asyncio]>=2.0.30",
     "alembic>=1.13.0",
     "asyncpg>=0.29.0",
-    "aiosqlite>=0.20.0",
+    "aiosqlite>=0.22.1",
     "python-jose[cryptography]>=3.3.0",
     "itsdangerous>=2.2.0",
 ]
@@ -55,7 +55,7 @@ all = [
     "sqlalchemy[asyncio]>=2.0.30",
     "alembic>=1.13.0",
     "asyncpg>=0.29.0",
-    "aiosqlite>=0.20.0",
+    "aiosqlite>=0.22.1",
     "python-jose[cryptography]>=3.3.0",
     "itsdangerous>=2.2.0",
 ]
