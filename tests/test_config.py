@@ -163,7 +163,10 @@ def test_agent_config_missing_name():
 # ---------------------------------------------------------------------------
 
 def test_load_agent_config():
-    yaml_path = "/Users/blockmeta/Desktop/workspace/flux/agents/examples/news-summary.yaml"
+    import os
+    yaml_path = os.path.join(
+        os.path.dirname(__file__), "..", "agents", "examples", "news-summary.yaml"
+    )
     data = load_agent_config(yaml_path)
 
     assert isinstance(data, dict)
