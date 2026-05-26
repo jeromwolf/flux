@@ -46,6 +46,7 @@ api = [
     "aiosqlite>=0.20.0",
     "python-jose[cryptography]>=3.3.0",
     "itsdangerous>=2.2.0",
+    "slowapi>=0.1.9",
 ]
 all = [
     "openai>=1.60.0",
@@ -58,6 +59,7 @@ all = [
     "aiosqlite>=0.20.0",
     "python-jose[cryptography]>=3.3.0",
     "itsdangerous>=2.2.0",
+    "slowapi>=0.1.9",
 ]
 dev = [
     "pytest>=8.0",

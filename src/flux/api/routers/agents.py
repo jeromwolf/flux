@@ -11,10 +11,11 @@ import uuid
 from datetime import datetime, timezone
 
 import yaml
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from pydantic import ValidationError
 
 from flux.api.deps import CurrentUserDep, SessionDep
+from flux.api.rate_limit import limiter
 from flux.api.db import get_sessionmaker
 from flux.api.models import Run
 from flux.api.repositories import AgentRepository, RunRepository
@@ -58,7 +59,9 @@ async def list_agents(current_user: CurrentUserDep, session: SessionDep) -> list
 
 
 @router.post("", response_model=AgentOut, status_code=201)
+@limiter.limit("20/minute")
 async def create_agent(
+    request: Request,
     payload: AgentCreate,
     current_user: CurrentUserDep,
     session: SessionDep,
@@ -206,7 +209,9 @@ async def _execute_and_record(
 
 
 @router.post("/{agent_id}/run", response_model=RunOut, status_code=202)
+@limiter.limit("5/minute")
 async def run_agent_now(
+    request: Request,
     agent_id: uuid.UUID,
     current_user: CurrentUserDep,
     session: SessionDep,
@@ -238,7 +243,9 @@ async def run_agent_now(
 # ---------------------------------------------------------------------------
 
 @router.post("/{agent_id}/halt")
+@limiter.limit("10/minute")
 async def halt_agent(
+    request: Request,
     agent_id: uuid.UUID,
     current_user: CurrentUserDep,
     session: SessionDep,
@@ -259,7 +266,9 @@ async def halt_agent(
 
 
 @router.post("/{agent_id}/resume")
+@limiter.limit("10/minute")
 async def resume_agent(
+    request: Request,
     agent_id: uuid.UUID,
     current_user: CurrentUserDep,
     session: SessionDep,

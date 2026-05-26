@@ -106,14 +106,14 @@ user_prompt: |
   Recovery is logged to `~/.flux/agents/<name>/events.jsonl`.
 - **Multi-LLM** — Anthropic, OpenAI, Google, Ollama (BYOK: bring your own key)
 - **Built-in Tools** — Web search, web fetch, file I/O, memory, scheduling
-- **Security** — AST-based tool scanning, SSRF protection, path traversal prevention, secret masking
+- **Security** — Hash-pinned builtin tool manifest, AST-based scanning for user tools, SSRF protection, path traversal prevention, secret masking, JWT production guards, CORS allowlist, per-route rate limiting
 - **Hardened Scheduler** — `misfire_grace_time=300s`, `max_instances=1`, `coalesce=True`
   so missed runs catch up safely without overlap
 - **Rich CLI** — Beautiful terminal output with Rich panels and tables
 - **Cost Tracking** — Per-run cost recording with JSONL history + persistent budget state
 - **Web UI (Week 3)** — Next.js 14 dashboard with GitHub OAuth, agent builder, live run logs via WebSocket
 - **Multi-tenant API** — FastAPI + PostgreSQL + Alembic; per-user data dirs under `~/.flux/users/<id>/`
-- **Tested** — 113 tests covering config, safety + persistence, watchdog, scheduler, runner, CLI, resilience, DB, OAuth, agents API, WebSocket
+- **Tested** — 131 tests covering config, safety + persistence, watchdog, scheduler, runner, CLI, resilience, DB, OAuth, agents API, WebSocket, middleware, tool manifest
 
 ## 24/7 Operation Recipe
 
@@ -217,6 +217,10 @@ Result (text + tokens + cost)
 - Anthropic/OpenAI/Google SDK (LLM)
 - APScheduler (cron)
 - Pydantic (config validation)
+
+## Security
+
+Found a vulnerability? Please don't open a public issue. See [SECURITY.md](SECURITY.md) for the responsible disclosure process.
 
 ## License
 

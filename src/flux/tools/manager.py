@@ -61,18 +61,53 @@ class ToolManager:
 
     By default loads from src/flux/tools/builtins/. Pass a custom tools_dir
     to load from a different location (e.g. a user-configured directory).
+
+    Security model for builtins
+    ---------------------------
+    Earlier versions of this class auto-approved *any* file dropped into the
+    builtins directory, which meant an attacker who could ship code through a
+    PR could bypass the AST scanner entirely. We now require a SHA-256
+    manifest (``_manifest.json``) co-located with the tools; a builtin loads
+    without prompting only if its hash matches the manifest entry. Any
+    mismatch, missing entry, or absent manifest forces the standard scan +
+    approval flow.
     """
 
     _APPROVED_FILE = ".tool_approved.json"
+    _MANIFEST_FILE = "_manifest.json"
 
     def __init__(self, tools_dir: str | None = None):
         self.tools_dir = tools_dir if tools_dir is not None else _BUILTINS_DIR
-        self._is_builtin_dir = (self.tools_dir == _BUILTINS_DIR)
+        # A directory is treated as "builtin-like" iff it ships a manifest.
+        # This lets tests stage a fake builtins dir under tmp_path simply by
+        # writing a manifest there.
+        self._manifest_path = os.path.join(self.tools_dir, self._MANIFEST_FILE)
+        self._is_builtin_dir = os.path.isfile(self._manifest_path)
+        self._builtin_hashes: dict = self._load_builtin_manifest()
         self.schemas: list = []
         self.functions: dict = {}
         self._file_mtimes: dict = {}
         self._approved: set = set()  # User-approved files (in-session)
         self._load_all(first_load=True)
+
+    def _load_builtin_manifest(self) -> dict:
+        """Load the SHA-256 manifest for builtin tools.
+
+        Returns an empty dict if the manifest doesn't exist or fails to parse —
+        in that case the standard scan + approval flow takes over.
+        """
+        if not self._is_builtin_dir:
+            return {}
+        try:
+            with open(self._manifest_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, json.JSONDecodeError, ValueError) as e:
+            logger.warning(f"Failed to load builtin manifest {self._manifest_path}: {e}")
+            return {}
+        if not isinstance(data, dict):
+            logger.warning(f"Builtin manifest is not a JSON object: {self._manifest_path}")
+            return {}
+        return data
 
     # ----------------------------------------------------------
     # File scanning
@@ -179,30 +214,71 @@ class ToolManager:
             return None
         content = raw.decode("utf-8", errors="replace")
 
-        # Security scan: regex + AST + hash-based persistent approval
-        # Auto-approve builtin tools shipped with the framework
-        if self._is_builtin_dir:
-            self._approved.add(filename)
+        # Security scan: regex + AST + hash-based persistent approval.
+        # For builtin directories (those shipping a manifest), the only way
+        # to skip the scan is to match the manifest hash exactly. There is
+        # no automatic "this is builtins/, trust it" shortcut anymore — see
+        # the class docstring for the rationale.
         if filename not in self._approved:
-            dangers = self._check_dangerous(content) + self._check_dangerous_ast(content)
             file_hash = self._file_hash(raw)
-            saved = self._load_approved_hashes()
-            if saved.get(filename) == file_hash:
-                pass  # Previously approved + file unchanged -> auto-approve
-            else:
-                if dangers:
-                    logger.warning(f"Dangerous patterns found in {filename}: {dangers}")
+            if self._is_builtin_dir:
+                expected = self._builtin_hashes.get(filename)
+                if expected and expected == file_hash:
+                    # Manifest entry exists and matches → trusted, no scan.
+                    self._approved.add(filename)
                 else:
-                    logger.info(f"New tool {filename} found -- approval required.")
-                if not sys.stdin.isatty():
-                    logger.warning(f"Tool blocked: {filename} (auto-blocked in non-interactive env)")
-                    return None
-                confirm = input(f"Load {filename}? (Y/N): ").strip().upper()
-                if confirm != "Y":
-                    logger.warning(f"Tool blocked by user: {filename}")
-                    return None
-                saved[filename] = file_hash
-                self._save_approved_hashes(saved)
+                    # Either unregistered (no entry) or modified (hash mismatch).
+                    # Run the scanner so the warning surface is identical to
+                    # the user-tool flow, then block in non-interactive envs.
+                    dangers = self._check_dangerous(content) + self._check_dangerous_ast(content)
+                    if expected is None:
+                        logger.warning(
+                            f"Builtin tool {filename} is not in the manifest — "
+                            f"refusing to load without explicit approval."
+                        )
+                    else:
+                        logger.warning(
+                            f"Builtin tool {filename} has been modified "
+                            f"(hash mismatch with manifest) — refusing to load "
+                            f"without explicit approval."
+                        )
+                    if dangers:
+                        logger.warning(f"Dangerous patterns found in {filename}: {dangers}")
+                    if not sys.stdin.isatty():
+                        logger.warning(
+                            f"Tool blocked: {filename} (auto-blocked in non-interactive env)"
+                        )
+                        return None
+                    confirm = input(f"Load {filename}? (Y/N): ").strip().upper()
+                    if confirm != "Y":
+                        logger.warning(f"Tool blocked by user: {filename}")
+                        return None
+                    # NOTE: we intentionally do NOT persist this approval into
+                    # the manifest from a running process. Updating the
+                    # manifest is a deliberate, audited step (see
+                    # scripts/regenerate_builtin_manifest.py).
+            else:
+                # Non-builtin directory: existing scan + persistent approval flow.
+                dangers = self._check_dangerous(content) + self._check_dangerous_ast(content)
+                saved = self._load_approved_hashes()
+                if saved.get(filename) == file_hash:
+                    pass  # Previously approved + file unchanged -> auto-approve
+                else:
+                    if dangers:
+                        logger.warning(f"Dangerous patterns found in {filename}: {dangers}")
+                    else:
+                        logger.info(f"New tool {filename} found -- approval required.")
+                    if not sys.stdin.isatty():
+                        logger.warning(
+                            f"Tool blocked: {filename} (auto-blocked in non-interactive env)"
+                        )
+                        return None
+                    confirm = input(f"Load {filename}? (Y/N): ").strip().upper()
+                    if confirm != "Y":
+                        logger.warning(f"Tool blocked by user: {filename}")
+                        return None
+                    saved[filename] = file_hash
+                    self._save_approved_hashes(saved)
 
         # In-memory execution (prevents TOCTOU - does not re-read from disk)
         try:

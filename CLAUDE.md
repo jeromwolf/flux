@@ -219,7 +219,7 @@ flux cost <name>             # 비용 요약
 | **W3** | Next.js 웹 UI + FastAPI + 인증 | 웹에서 에이전트 생성/배포/모니터링 |
 | **W4** | 독푸딩 + OSS 공개 + HN 런칭 | GitHub public, Show HN 포스트, 첫 외부 유저 |
 
-**현재: Week 4 진행 중 — OSS 메타 + 예제 에이전트 + 콘텐츠 초안 + 릴리즈 체크리스트 완료. v0.1.0 태그/Show HN 게시는 켈리 직접 ✓ (113 tests, ruff clean)**
+**현재: Week 4 진행 중 — OSS 메타 + 예제 에이전트 + 콘텐츠 초안 + 릴리즈 체크리스트 완료. Pre-launch P0 보안 hardening 4건 완료(JWT prod 가드, SECURITY.md, CORS+rate limit, AST 매니페스트 해시 화이트리스트). v0.1.0 태그/Show HN 게시는 켈리 직접 ✓ (131 tests, ruff clean)**
 
 ---
 
